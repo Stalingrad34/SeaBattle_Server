@@ -1,0 +1,29 @@
+{
+  "name": "seabattle-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SeaBattle authoritative Colyseus server",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc",
+    "export": "schema-codegen src/rooms/schema/MatchState.ts --csharp --namespace Game.Scripts.Multiplayer.Generated --output ../Assets/Game/Scripts/Multiplayer/Generated",
+    "start": "tsx watch src/index.ts",
+    "start:prod": "node dist/index.js",
+    "test": "npm run build && node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@colyseus/core": "0.16.26",
+    "@colyseus/schema": "3.0.76",
+    "@colyseus/tools": "0.16.20",
+    "@colyseus/ws-transport": "0.16.5"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.15",
+    "colyseus.js": "0.16.22",
+    "tsx": "4.21.0",
+    "typescript": "5.9.3"
+  }
+}
+

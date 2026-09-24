@@ -1,0 +1,11 @@
+{
+    "BoardSize": 6,
+    "ShipLengths": [
+        3,
+        2,
+        2,
+        1
+    ],
+    "TurnDurationSeconds": 15,
+    "ReconnectGraceSeconds": 120
+}
