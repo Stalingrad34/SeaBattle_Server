@@ -28,7 +28,7 @@ test("reconnect restores identity, private fleet, lost command result; expiry fo
   {
     let first = await client.create("battle", { roomName: "RECOV001" });
     rooms.add(first);
-    const second = await client.joinById(first.roomId);
+    let second = await client.joinById(first.roomId);
     rooms.add(second);
     await Promise.all([first, second].map(room => waitForState(room, state => state.phase === "playing")));
     if (first.sessionId !== first.state.activePlayerId)
@@ -61,6 +61,21 @@ test("reconnect restores identity, private fleet, lost command result; expiry fo
     assert.equal(result.revision, revision);
     assert.equal(first.state.players.get(id).outgoingShots.length, 1);
     assert.deepEqual(await send(first, command), result);
+    const otherId = second.sessionId;
+    const tokens = [first.reconnectionToken, second.reconnectionToken];
+    await Promise.all([first.leave(false), second.leave(false)]);
+    rooms.delete(first);
+    rooms.delete(second);
+    [first, second] = await Promise.all(tokens.map(token => reconnect(client, token)));
+    rooms.add(first);
+    rooms.add(second);
+    await Promise.all([first, second].map(room => waitForState(room, state => state.phase === "playing")));
+    assert.equal(first.sessionId, id);
+    assert.equal(second.sessionId, otherId);
+    assert.equal(first.state.players.size, 1);
+    assert.equal(second.state.players.size, 1);
+    assert.equal(first.state.revision, revision);
+    assert.deepEqual(await send(first, command), result, "both clients leaving must not erase command history");
     const expiredToken = first.reconnectionToken;
     await first.leave(false);
     rooms.delete(first);

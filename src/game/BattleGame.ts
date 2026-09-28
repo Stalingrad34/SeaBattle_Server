@@ -7,7 +7,7 @@ import { placeFleet } from "./FleetPlacement.js";
 export class BattleGame
 {
   readonly state = new MatchState();
-  private readonly accepted = new Map<string, Map<string, { command: FireCommand; result: CommandResult }>>();
+  private readonly outcomes = new Map<string, Map<string, { command: FireCommand; result: CommandResult }>>();
   private readonly config: GameConfig;
 
   constructor(config: GameConfig, matchId: string, private readonly now: () => number, private readonly random: () => number = Math.random)
@@ -29,7 +29,7 @@ export class BattleGame
     player.playerId = id;
     player.ownShips = new ArraySchema(...placeFleet(this.config.BoardSize, this.config.ShipLengths, this.random));
     this.state.players.set(id, player);
-    this.accepted.set(id, new Map());
+    this.outcomes.set(id, new Map());
     this.state.playerCount = this.state.players.size;
     if (this.state.playerCount === 2)
     {
@@ -51,7 +51,7 @@ export class BattleGame
     if (this.state.phase === "waiting")
     {
       this.state.players.delete(id);
-      this.accepted.delete(id);
+      this.outcomes.delete(id);
       this.state.playerCount = this.state.players.size;
       this.state.revision++;
     }
@@ -75,7 +75,8 @@ export class BattleGame
 
   fire(playerId: string, command: FireCommand): CommandResult
   {
-    const previous = this.accepted.get(playerId)?.get(command.commandId);
+    const outcomes = this.outcomes.get(playerId);
+    const previous = outcomes?.get(command.commandId);
     if (previous)
     {
       if (previous.command.turnId !== command.turnId || previous.command.x !== command.x || previous.command.y !== command.y)
@@ -84,7 +85,6 @@ export class BattleGame
       }
       return { ...previous.result };
     }
-    const outcomes = this.accepted.get(playerId);
     if (!outcomes)
     {
       return this.rejected(command, "unauthorized");
@@ -102,10 +102,6 @@ export class BattleGame
   {
     const expiredTurn = this.state.turnId;
     const expired = this.tick();
-    if (!this.state.players.has(playerId))
-    {
-      return this.rejected(command, "unauthorized");
-    }
     if (this.state.phase !== "playing")
     {
       return this.rejected(command, this.state.phase === "finished" ? "match_finished" : "match_not_started");
@@ -157,9 +153,8 @@ export class BattleGame
       this.nextTurn();
     }
     this.state.revision++;
-    const response: CommandResult = { commandId: command.commandId, turnId: command.turnId,
+    return { commandId: command.commandId, turnId: command.turnId,
       revision: this.state.revision, status: "applied", reason: null };
-    return { ...response };
   }
 
   private rejected(command: FireCommand, reason: string): CommandResult

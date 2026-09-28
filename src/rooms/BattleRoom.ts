@@ -25,17 +25,17 @@ export class BattleRoom extends Room<MatchState>
       throw new ServerError(409, "room_name_taken");
     }
     this.roomId = name;
-    const config = loadGameConfig();
+    let config = loadGameConfig();
     if (options.gameConfig !== undefined)
     {
       try
       {
-        Object.assign(config, validateGameConfig({
+        config = validateGameConfig({
           ...config,
           BoardSize: options.gameConfig?.BoardSize,
           ShipLengths: options.gameConfig?.ShipLengths,
           TurnDurationSeconds: options.gameConfig?.TurnDurationSeconds
-        }));
+        });
       }
       catch
       {
