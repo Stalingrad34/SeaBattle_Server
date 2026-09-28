@@ -84,6 +84,22 @@ export class BattleGame
       }
       return { ...previous.result };
     }
+    const outcomes = this.accepted.get(playerId);
+    if (!outcomes)
+    {
+      return this.rejected(command, "unauthorized");
+    }
+    if (outcomes.size >= 2048)
+    {
+      return this.rejected(command, "command_limit");
+    }
+    const result = this.applyFire(playerId, command);
+    outcomes.set(command.commandId, { command: { ...command }, result });
+    return { ...result };
+  }
+
+  private applyFire(playerId: string, command: FireCommand): CommandResult
+  {
     const expiredTurn = this.state.turnId;
     const expired = this.tick();
     if (!this.state.players.has(playerId))
@@ -121,11 +137,14 @@ export class BattleGame
     for (const shots of [attacker.outgoingShots, defender.incomingShots])
     {
       const shot = new ShotState().assign({ x: command.x, y: command.y, result });
+      shots.push(shot);
       if (sunk)
       {
-        shot.sunkCells = new ArraySchema(...ship!.cells.map(cell => new CellState().assign({ x: cell.x, y: cell.y })));
+        for (const cell of ship!.cells)
+        {
+          shot.sunkCells.push(new CellState().assign({ x: cell.x, y: cell.y }));
+        }
       }
-      shots.push(shot);
     }
     const defeated = defender.ownShips.every(ship => ship.cells.every(cell =>
       attacker.outgoingShots.some(shot => shot.x === cell.x && shot.y === cell.y)));
@@ -140,7 +159,6 @@ export class BattleGame
     this.state.revision++;
     const response: CommandResult = { commandId: command.commandId, turnId: command.turnId,
       revision: this.state.revision, status: "applied", reason: null };
-    this.accepted.get(playerId)!.set(command.commandId, { command: { ...command }, result: response });
     return { ...response };
   }
 

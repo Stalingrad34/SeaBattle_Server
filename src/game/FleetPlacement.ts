@@ -1,6 +1,6 @@
 import { CellState, ShipState } from "../rooms/schema/MatchState.js";
 
-/** Straight ships may touch, but never overlap. Longest ships are placed first. */
+/** Straight ships cannot touch, even diagonally. Longest ships are placed first. */
 export function placeFleet(size: number, lengths: readonly number[], random: () => number): ShipState[]
 {
   const order = lengths.map((length, index) => ({ length, index })).sort((a, b) => b.length - a.length);
@@ -27,7 +27,22 @@ export function placeFleet(size: number, lengths: readonly number[], random: () 
             continue;
           }
           const cells = Array.from({ length }, (_, step) => (y + (vertical ? step : 0)) * size + x + (vertical ? 0 : step));
-          if (cells.every(cell => !occupied.has(cell)))
+          if (cells.every(cell =>
+          {
+            const cx = cell % size;
+            const cy = Math.floor(cell / size);
+            for (let ny = Math.max(0, cy - 1); ny <= Math.min(size - 1, cy + 1); ny++)
+            {
+              for (let nx = Math.max(0, cx - 1); nx <= Math.min(size - 1, cx + 1); nx++)
+              {
+                if (occupied.has(ny * size + nx))
+                {
+                  return false;
+                }
+              }
+            }
+            return true;
+          }))
           {
             candidates.push(cells);
           }

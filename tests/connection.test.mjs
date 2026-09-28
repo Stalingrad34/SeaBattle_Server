@@ -38,8 +38,35 @@ test("real server: full battle, private patches, validation and duplicate comman
     }
     assert.ok(ready, `Server failed to become ready: ${output}`);
     const client = new Client(`ws://127.0.0.1:${port}`);
-    const first = await client.create("battle", { BoardSize: 32, ShipLengths: [32] });
+    await assert.rejects(client.create("battle", { roomName: "bad" }));
+    await assert.rejects(client.joinById("MISSING1"));
+    const customRules = { BoardSize: 10, ShipLengths: [4, 2, 1], TurnDurationSeconds: 30 };
+    for (const gameConfig of [null, {}, { ...customRules, BoardSize: 33 },
+      { ...customRules, ShipLengths: [11] }, { ...customRules, TurnDurationSeconds: 0 }])
+    {
+      await assert.rejects(client.create("battle", { roomName: "CUSTOM01", gameConfig }), /invalid_game_config/);
+    }
+    const custom = await client.create("battle", { roomName: "CUSTOM01", gameConfig: customRules });
+    rooms.push(custom);
+    const guest = await client.joinById(custom.roomId, { gameConfig: { ...customRules, BoardSize: 20 } });
+    rooms.push(guest);
+    await Promise.all([custom, guest].map(room => waitForState(room, state => state.phase === "playing")));
+    for (const room of [custom, guest])
+    {
+      assert.equal(room.state.boardSize, 10);
+      assert.equal(room.state.turnDurationSeconds, 30);
+      assert.deepEqual([...room.state.shipLengths], [4, 2, 1]);
+      assert.deepEqual([...room.state.players.get(room.sessionId).ownShips].map(ship => ship.cells.length).sort(), [1, 2, 4]);
+    }
+    const first = await client.create("battle", { roomName: "TEST0001", BoardSize: 32, ShipLengths: [32] });
     rooms.push(first);
+    assert.equal(first.roomId, "TEST0001");
+    await assert.rejects(client.create("battle", { roomName: "TEST0001" }));
+    const clockResponse = receive(first, "serverTime");
+    first.send("serverTime", 1);
+    const clock = await clockResponse;
+    assert.equal(clock.requestId, 1);
+    assert.ok(Number.isFinite(clock.serverTimeMs));
     await waitForState(first, state => state.players?.has(first.sessionId));
     assert.equal(first.state.phase, "waiting");
     assert.equal(first.state.boardSize, 6, "client options must not override server rules");
@@ -90,6 +117,7 @@ test("real server: full battle, private patches, validation and duplicate comman
       const hitShip = [...enemy.ownShips].find(ship => [...ship.cells].some(c => c.x === shot.x && c.y === shot.y));
       assert.equal(sent.result === "miss", !hitShip);
       if (sent.result !== "sunk") assert.equal(sent.sunkCells.length, 0);
+      else assert.deepEqual(sent.sunkCells.toJSON(), hitShip.cells.toJSON(), "sunk ship cells must reach both clients");
       if (room.state.phase === "playing") assert.equal(room.state.activePlayerId, other.sessionId);
       moves++;
     }

@@ -32,6 +32,19 @@ test("fleet placement: 200 seeds, configured lengths, straight, contiguous, boun
     const fleet = placeFleet(6, [3, 2, 2, 1], seeded(seed));
     assert.deepEqual(fleet.map(ship => ship.cells.length).sort(), [1, 2, 2, 3]);
     const cells = new Set();
+    for (let i = 0; i < fleet.length; i++)
+    {
+      for (let j = i + 1; j < fleet.length; j++)
+      {
+        for (const a of fleet[i].cells)
+        {
+          for (const b of fleet[j].cells)
+          {
+            assert.ok(Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y)) > 1, "ships must not touch");
+          }
+        }
+      }
+    }
     for (const ship of fleet)
     {
       assert.ok(ship.cells.every(c => c.x === ship.cells[0].x) || ship.cells.every(c => c.y === ship.cells[0].y));
@@ -66,7 +79,7 @@ test("wrong player, out-of-bounds, fractional coordinates do not consume the tur
   const revision = game.state.revision;
   assert.equal(game.fire(opponent(game, active).playerId, command(game, 0, 0)).reason, "wrong_turn");
   for (const [x, y] of [[-1, 0], [6, 0], [0, 6], [0.5, 2], [NaN, 0]])
-    assert.equal(game.fire(active, command(game, x, y)).reason, "out_of_bounds");
+    assert.equal(game.fire(active, command(game, x, y, `invalid-${x}-${y}`)).reason, "out_of_bounds");
   assert.equal(game.state.revision, revision);
   assert.equal(game.state.turnId, 1);
 });
@@ -115,7 +128,7 @@ test("miss and repeated cell; sink reveals only that ship; all ships sunk finish
   game.fire(attacker, command(game, miss.x, miss.y));
   assert.equal(game.state.players.get(attacker).outgoingShots[0].result, "miss");
   advance(); game.tick();
-  assert.equal(game.fire(attacker, command(game, miss.x, miss.y)).reason, "already_shot");
+  assert.equal(game.fire(attacker, command(game, miss.x, miss.y, "repeated-cell")).reason, "already_shot");
   for (const ship of defender.ownShips)
   {
     for (const [index, cell] of [...ship.cells].entries())
@@ -148,5 +161,21 @@ test("waiting does not expire; departure before start frees seat; departure duri
   game.removePlayer("b");
   assert.equal(game.state.winnerId, "c");
   assert.equal(game.state.phase, "finished");
+});
+
+test("rejected future-turn command remains rejected when its turn arrives", () =>
+{
+  const { game, advance } = fixture();
+  const player = game.state.activePlayerId;
+  const fire = { commandId: "future", turnId: 3, x: 0, y: 0 };
+  const rejected = game.fire(player, fire);
+  assert.equal(rejected.reason, "wrong_turn");
+  advance(); game.tick();
+  advance(); game.tick();
+  assert.equal(game.state.activePlayerId, player);
+  assert.equal(game.state.turnId, 3);
+  assert.deepEqual(game.fire(player, fire), rejected);
+  assert.equal(game.state.players.get(player).outgoingShots.length, 0);
+  assert.equal(game.fire(player, { ...fire, commandId: "new" }).status, "applied");
 });
 
